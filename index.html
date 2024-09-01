@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Checkseed | Custom Electrum-Compatible Mnemonics</title>
+    <style>
+      html {
+        font-family: monospace, monospace;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>Checkseed: Custom Electrum-Compatible Mnemonics</h1>
+
+    <section>
+      <p>
+        Enter a mnemonic to make it electrum compliant (you can use any
+        sentence):
+      </p>
+
+      <textarea id="seed">i liek bitcoin </textarea>
+
+      <p><strong>Standard mnemonic</strong> with calculated nonce (0x01):</p>
+      <code id="res-standard"></code>
+
+      <p><strong>SegWit mnemonic</strong> with calculated nonce (0x100):</p>
+      <code id="res-segwit"></code>
+    </section>
+
+    <hr />
+
+    <section>
+      <h2>Explanation</h2>
+      <p>
+        <strong>Checkseed</strong> is a tool that allows users to create custom
+        mnemonic phrases that can be used as a seed in Electrum, a widely used
+        Bitcoin wallet. Unlike BIP-39, where the seed is derived from a
+        predefined dictionary of words, Electrum uses the hash of the mnemonic
+        phrase to generate the master key. This characteristic enables Electrum
+        to accept any mnemonic phrase, making it possible to create personalized
+        mnemonics while still generating valid wallets.
+      </p>
+      <h3>How It Works</h3>
+      <p>
+        Electrum determines the wallet version by examining the first bits of
+        the hash generated from the mnemonic phrase. If the beginning of the
+        hash does not match a recognized wallet version, Electrum will reject
+        the mnemonic. Checkseed solves this issue by automatically appending a
+        nonce to the user-provided mnemonic. This nonce is adjusted until the
+        hash of the entire mnemonic (including the nonce) starts with the
+        correct bits for a supported wallet version, such as
+        <code>SegWit</code> or <code>Standard</code>.
+      </p>
+      <h3>Example Workflow</h3>
+      <ol>
+        <li>
+          <strong>User Input:</strong> Begin with a custom phrase, such as "i
+          liek bitcoin ".
+        </li>
+        <li>
+          <strong>Automatic Nonce Search:</strong> Checkseed automatically
+          appends and adjusts a nonce to the input phrase, hashing the result
+          repeatedly until the hash begins with the required bits for the
+          desired wallet version.
+        </li>
+        <li>
+          <strong>Result:</strong> The process produces a mnemonic like "i liek
+          bitcoin 178", where "178" is the nonce that makes the hash valid for
+          the selected wallet version.
+        </li>
+      </ol>
+      <h3>Important Considerations</h3>
+      <p>
+        <strong>Security Risks:</strong> Custom mnemonics often have lower
+        entropy compared to randomly generated ones, making them more
+        susceptible to collisions or brute-force attacks. This increases the
+        risk of funds being compromised. It's important to thoroughly understand
+        these risks before using Checkseed-generated mnemonics in a live wallet.
+      </p>
+      <p>
+        <strong>Electrum Compatibility:</strong> After generating the mnemonic,
+        it should be tested to confirm that it correctly generates the intended
+        wallet in Electrum and that the correct wallet version is recognized.
+      </p>
+      <h3>Disclaimer</h3>
+      <p>
+        Using low-entropy, human-generated mnemonics as wallet seeds introduces
+        significant security risks, including the potential loss of funds. For
+        securing substantial amounts of cryptocurrency, it is strongly
+        recommended to use standard, randomly generated mnemonics. Custom
+        mnemonics should only be used with a full understanding of the
+        associated risks.
+      </p>
+      <h3>Source</h3>
+      <a href="https://github.com/kenyerman/checkseed"
+        >Source code hosted on github.</a
+      >
+    </section>
+
+    <script>
+      const getVersionHash = async (mnemonic) => {
+        const enc = new TextEncoder("utf-8");
+
+        const key = await window.crypto.subtle.importKey(
+          "raw",
+          enc.encode("Seed version"),
+          { name: "HMAC", hash: "SHA-512" },
+          false,
+          ["sign"]
+        );
+
+        const signature = await window.crypto.subtle.sign(
+          "HMAC",
+          key,
+          enc.encode(mnemonic)
+        );
+
+        return Array.from(new Uint8Array(signature))
+          .map((b) => b.toString(16).padStart(2, "0"))
+          .join("");
+      };
+
+      const getNonceForPrefix = async (mnemonic, prefix) => {
+        if ((await getVersionHash(mnemonic)).startsWith(prefix)) {
+          return "";
+        }
+
+        let n = 0;
+
+        while (!(await getVersionHash(mnemonic + ++n)).startsWith(prefix));
+
+        return n + "";
+      };
+
+      document.addEventListener("DOMContentLoaded", () => {
+        const area = document.querySelector("#seed");
+        const standard = document.querySelector("#res-standard");
+        const segwit = document.querySelector("#res-segwit");
+
+        area.addEventListener("input", async (event) => {
+          const mnemonic = event.target.value;
+
+          standard.innerHTML =
+            mnemonic + (await getNonceForPrefix(mnemonic, "01"));
+          segwit.innerHTML =
+            mnemonic + (await getNonceForPrefix(mnemonic, "100"));
+        });
+
+        area.dispatchEvent(new Event("input"));
+      });
+    </script>
+  </body>
+</html>
